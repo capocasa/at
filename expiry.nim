@@ -1,5 +1,7 @@
 
-import asyncdispatch, asyncfutures, tables, times, limdb, flatty
+import asyncdispatch, asyncfutures, tables, times, limdb, flatty, expiry/blob
+
+
 
 type
   Expiry* = object
@@ -29,7 +31,7 @@ proc process*(e: Expiry) {.async.} =
       discard await withTimeout[void](Future[void](e.trigger), e.renew.inMilliseconds.int)
       e.trigger.clean()
     let tb = e.next
-    let t = tb.fromFlatty(Time)
+    let t = tb.fromBlob()
     if t <= now:
       e.remove(tb)
     else:
@@ -55,9 +57,9 @@ proc initExpiry*(db: Database, timedbName="", keydbName=""): Expiry =
 
 proc expire*(e: Expiry, key: string, t: Time) =
 
-  let retrigger = e.timedb.len == 0 or e.next.fromFlatty(Time) > t
+  let retrigger = e.timedb.len == 0 or e.next.fromBlob > t
   
-  let tb = t.toFlatty
+  let tb = t.toBlob
   e.timedb[tb] = key
   e.keydb[key] = tb
     
