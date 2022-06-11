@@ -19,10 +19,10 @@ func readInt32*(s: string, i: int): int32 {.inline.} =
   result = cast[ptr int32](s[i].unsafeAddr)[]
 
 
-proc toBlob*(t: Time):string =
+proc timeToBlob*(t: Time):string =
   result.addInt64(t.toUnix)
   result.addInt32(t.nanosecond)
 
-proc fromBlob*(s: string): Time =
+proc blobToTime*(s: string): Time =
   initTime(s.readInt64(0), s.readInt32(8).int)
 
