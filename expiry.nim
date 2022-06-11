@@ -1,67 +1,60 @@
 
-import asyncdispatch, asyncfutures, tables, times, limdb, flatty, expiry/blob
-
-
+import asyncdispatch, asyncfutures, times, expiry/blob
 
 type
-  Expiry* = object
+  Expiry*[T] = ref object  # ref for the async code
     renew*: Duration
     trigger*: FutureVar[void]
-    db*: Database
-    timedb*: Database
-    keydb*: Database
+    db*: T
+    timeToKey*: T
+    keyToTime*: T
 
 proc next*(e: Expiry): string=
-  for tb in e.timedb.keys:
+  mixin keys
+  for tb in e.timeToKey.keys:
     return tb
 
-proc remove(e: Expiry, tb: string) =
-  let key = e.timedb[tb]
+proc expire(e: Expiry, tb: string) =
+  mixin del
+  let key = e.timeToKey[tb]
   try:
     e.db.del(key)
   except KeyError:
     discard
-  e.timedb.del(tb, key)
-  e.keydb.del(key, tb)
+  e.timeToKey.del(tb)
+  e.keyToTime.del(key)
 
 proc process*(e: Expiry) {.async.} =
   while true:
     let now = getTime()
-    while e.timedb.len == 0:
+    while e.timeToKey.len == 0:
       discard await withTimeout[void](Future[void](e.trigger), e.renew.inMilliseconds.int)
       e.trigger.clean()
     let tb = e.next
     let t = tb.fromBlob()
+    echo $t, " ", $now
     if t <= now:
-      e.remove(tb)
+      e.expire(tb)
     else:
       let d = t - now
       discard await withTimeout[void](Future[void](e.trigger), d.inMilliseconds.int)
       e.trigger.clean()
 
-proc initExpiry*(db, timedb, keydb: Database): Expiry =
-  result.trigger = newFutureVar[void]("expiry" & db.name)
+proc initExpiry*[T](db, timeToKey, keyToTime: T): Expiry[T] =
+  new(result)
+  result.trigger = newFutureVar[void]("expiry")
   result.db = db
-  result.timedb = timedb
-  result.keydb = keydb
+  result.timeToKey = timeToKey
+  result.keyToTime = keyToTime
   result.renew = initDuration(seconds=3)
 
-proc initExpiry*(db: Database, timedbName="", keydbName=""): Expiry =
-  var timedbName = if timedbName == "": "xpt" & db.name else: timedbName
-  var keydbName = if keydbName == "": "xpk" & db.name else: keydbName
-  initExpiry(
-    db,
-    db.initDatabase(timedbName),
-    db.initDatabase(keydbName)
-  )
-
 proc expire*(e: Expiry, key: string, t: Time) =
-
-  let retrigger = e.timedb.len == 0 or e.next.fromBlob > t
+  mixin `[]=`
+  let retrigger = e.timeToKey.len == 0 or e.next.fromBlob > t
   
   let tb = t.toBlob
-  e.timedb[tb] = key
-  e.keydb[key] = tb
+  e.timeToKey[tb] = key
+  e.keyToTime[key] = tb
     
   if retrigger:
     e.trigger.complete()

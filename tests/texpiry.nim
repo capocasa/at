@@ -1,12 +1,32 @@
 
-import std/asyncdispatch, std/os, std/times, limdb, ../expiry
 
-let dirName = getTempDir() / "texpiry.lmdb"
-removeDir(dirName)
-let db = initDatabase(dirName, "test")
-let db1 = initDatabase(db, "testtimes")
-let db2 = initDatabase(db, "testkeys")
-let e = initExpiry(db, db1, db2)
+import std/asyncdispatch, std/os, std/times, critbits, ../expiry
+
+# set up a critbittree with the proper interface for testing
+type
+  Crit = ref CritBitTree[string]
+
+proc initCrit(): Crit =
+  new(result)
+template del(t: Crit, key:string) =
+  t[].excl key
+template len(t: Crit):int =
+  t[].len
+template `[]`(t: Crit, key:string):string =
+  t[][key]
+template `[]=`(t: Crit, key, value: string) =
+  t[][key] = value
+template contains(t: Crit, key: string):bool =
+  key in t[]
+iterator keys(t: Crit): string =
+  for key in t[].keys:
+    yield key
+
+let db = initCrit()
+let timeToKey = initCrit()
+let keyToTime = initCrit()
+
+var e = initExpiry(db, timeToKey, keyToTime)
 asyncCheck e.process()
 
 proc main() {.async.} =
@@ -28,5 +48,4 @@ proc main() {.async.} =
 
 waitFor main()
 
-removeDir(dirName)
 
