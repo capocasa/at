@@ -130,10 +130,10 @@
 import asyncdispatch, asyncfutures, times
 
 type
-  At*[TTable] = ref object  # ref for the async code
+  At*[TTimeToKey, TTable2] = ref object  # ref for the async code
     trigger*: FutureVar[void]
-    t2k*: TTable
-    k2t*: TTable
+    t2k*: TTimeToKey
+    k2t*: TTable2
 
 proc next*(a: At): Time =
   mixin keys
@@ -169,7 +169,7 @@ proc process*(a: At) {.async.} =
       discard await withTimeout[void](Future[void](a.trigger), d.inMilliseconds.int)
       a.trigger.clean()
 
-proc initAt*[TTable](t2k: TTable, k2t: TTable): At[TTable] =
+proc initAt*[TTimeToKey, TTable2](t2k: TTimeToKey, k2t: TTable2): At[TTimeToKey, TTable2] =
   new(result)
   result.t2k = t2k
   result.k2t = k2t
