@@ -157,7 +157,7 @@ function main() {
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
   
-  <p class="module-desc"><p>A lightweight tool to execute code later</p>
+  <p class="module-desc"><p>A powerful, lightweight tool to execute code later</p>
 
 <h1><a class="toc-backref" id="whyqmark" href="#whyqmark">Why?</a></h1><p>While the same thing can be accomplished using the standard library's <tt class="docutils literal"><span class="pre"><span class="Identifier">asyncdispatch</span></span></tt>, at stores the values in a table and only uses one future to go through them.</p>
 <p>This has a lot of advantages:</p>
@@ -286,7 +286,7 @@ function main() {
 </pre></dt>
 <dd>
 
-
+A powerful, lightweight tool to execute code later
 
 </dd>
 
@@ -298,21 +298,21 @@ function main() {
 <dt><pre><span class="Keyword">proc</span> <a href="#%5B%5D%3D%2CAt%2CT%2CDuration"><span class="Identifier">`[]=`</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">a</span><span class="Other">:</span> <a href="at.html#At"><span class="Identifier">At</span></a><span class="Other">;</span> <span class="Identifier">key</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">;</span> <span class="Identifier">d</span><span class="Other">:</span> <span class="Identifier">Duration</span><span class="Other">)</span></pre></dt>
 <dd>
 
-
+Set a trigger relative to now.
 
 </dd>
 <a id="[]=,At,T,Time"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#%5B%5D%3D%2CAt%2CT%2CTime"><span class="Identifier">`[]=`</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">a</span><span class="Other">:</span> <a href="at.html#At"><span class="Identifier">At</span></a><span class="Other">;</span> <span class="Identifier">key</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">;</span> <span class="Identifier">t</span><span class="Other">:</span> <span class="Identifier">Time</span><span class="Other">)</span></pre></dt>
 <dd>
 
-
+Set a trigger as an absolute time.
 
 </dd>
 <a id="del,At,T"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#del%2CAt%2CT"><span class="Identifier">del</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">a</span><span class="Other">:</span> <a href="at.html#At"><span class="Identifier">At</span></a><span class="Other">;</span> <span class="Identifier">key</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span></pre></dt>
 <dd>
 
-
+Manually remove a trigger by its key
 
 </dd>
 <a id="initAt,TTimeToKey,TTable2"></a>
@@ -331,14 +331,14 @@ function main() {
 <dt><pre><span class="Keyword">proc</span> <a href="#next%2CAt"><span class="Identifier">next</span></a><span class="Other">(</span><span class="Identifier">a</span><span class="Other">:</span> <a href="at.html#At"><span class="Identifier">At</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Time</span></pre></dt>
 <dd>
 
-
+Internal use, uses the <tt class="docutils literal"><span class="pre"><span class="Identifier">keys</span></span></tt> iterator to get the first time of the times-to-keys table to start waiting.
 
 </dd>
 <a id="process,At"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#process%2CAt"><span class="Identifier">process</span></a><span class="Other">(</span><span class="Identifier">a</span><span class="Other">:</span> <a href="at.html#At"><span class="Identifier">At</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">owned</span><span class="Other">(</span><span class="Identifier">Future</span><span class="Other">[</span><span class="Identifier">void</span><span class="Other">]</span><span class="Other">)</span></pre></dt>
 <dd>
 
-
+Call after initializing to start processing. This sets up the future and waits.
 
 </dd>
 <a id="trigger,At,Time,T"></a>
@@ -365,7 +365,7 @@ This is a trigger that does nothing. This needs to be implemented by you- copy t
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2022-06-12 22:37:48 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2022-06-12 22:43:24 UTC</small>
       </div>
     </div>
   </div>
