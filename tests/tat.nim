@@ -1,5 +1,5 @@
 
-import std/asyncdispatch, std/os, std/times, critbits, ../at, ../at/timeblobs
+import std/asyncdispatch, std/os, std/times, std/tables, std/critbits, ../at, ../at/timeblobs
 
 # a critbittree requires some boilerplate to be used like a regular table
 proc initCritBitTree[T](): CritBitTree[T] =
@@ -25,34 +25,32 @@ template `[]=`*(a: CritBitTree, s: string, t: Time) =
 
 # initialize our test table
 # must be a ref to refer to it outside the expiry
-var db: ref CritBitTree[string]
-new(db)
+var db = newTable[string, string]()
 
 proc trigger(a: At, t: Time, k: string) =
-  db[].del k
+  db.del k
 
 let a = initAt(initCritBitTree[string](), initCritBitTree[string]())
 asyncCheck a.process()
 
 proc main() {.async.} =
 
-  db[]["foo"] = "bar"
-  db[]["fuz"] = "buz"
+  db["foo"] = "bar"
+  db["fuz"] = "buz"
   
   a["foo"] = initDuration(seconds=1)
   a["fuz"] = initDuration(seconds=2)
 
   await sleepAsync(500)
-  assert "foo" in db[]
-  assert "fuz" in db[]
+  assert "foo" in db
+  assert "fuz" in db
   await sleepAsync(1000)
-  assert "foo" notin db[]
-  assert "fuz" in db[]
+  assert "foo" notin db
+  assert "fuz" in db
   await sleepAsync(1000)
-  assert "foo" notin db[]
-  assert "fuz" notin db[]
+  assert "foo" notin db
+  assert "fuz" notin db
 
 waitFor main()
-
 
 
