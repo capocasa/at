@@ -78,59 +78,59 @@
 ## for other tables.
 ##
 ## ```nim
-##     # a critbittree requires some boilerplate to be accessed like a regular table
-##     import std/asyncdispatch, std/os, std/times, std/tables, std/critbits, at, at/timeblobs
-##     
-##     # a critbittree requires some boilerplate to be used as a [time: string] table 
-##     proc initCritBitTree[T](): CritBitTree[T] =
-##       discard
-##     iterator keys*(t: CritBitTree[string]): Time =
-##       for k in critbits.keys(t):
-##         yield k.blobToTime
-##     proc del*(tab: var CritBitTree, t: Time) =
-##       tab.excl t.timeToBlob
-##     template `[]`*(a: CritBitTree, t: Time): string =
-##       a[t.timeToBlob]                                                 
-##     template `[]=`*(a: CritBitTree, t: Time, s: string) =
-##       a[t.timeToBlob] = s
+## # a critbittree requires some boilerplate to be accessed like a regular table
+## import std/asyncdispatch, std/os, std/times, std/tables, std/critbits, at, at/timeblobs
+## 
+## # a critbittree requires some boilerplate to be used as a [time: string] table 
+## proc initCritBitTree[T](): CritBitTree[T] =
+##   discard
+## iterator keys*(t: CritBitTree[string]): Time =
+##   for k in critbits.keys(t):
+##     yield k.blobToTime
+## proc del*(tab: var CritBitTree, t: Time) =
+##   tab.excl t.timeToBlob
+## template `[]`*(a: CritBitTree, t: Time): string =
+##   a[t.timeToBlob]                                                 
+## template `[]=`*(a: CritBitTree, t: Time, s: string) =
+##   a[t.timeToBlob] = s
 ##
-##     # Now that we've got the critbit behaving like a proper table,
-##     # we can get started.
+## # Now that we've got the critbit behaving like a proper table,
+## # we can get started.
 ##
-##     # We store our ephemeral data in a regular table. Note it's a `ref`
-##     # otherwise the modifications would be made on a copy.
+## # We store our ephemeral data in a regular table. Note it's a `ref`
+## # otherwise the modifications would be made on a copy.
 ##
-##     let data = newTable[string, string]()
+## let data = newTable[string, string]()
 ##
-##     # Now we add a trigger proc that `at` will call.
-##     # It accesses `data` as a global, but it can be placed into
-##     # a proc to use a closure instead.
+## # Now we add a trigger proc that `at` will call.
+## # It accesses `data` as a global, but it can be placed into
+## # a proc to use a closure instead.
 ##
-##     proc trigger(t: Time, k: string) =
-##         data.del k
+## proc trigger(t: Time, k: string) =
+##     data.del k
 ##
-##     # Now we can initialize `at`. We make two tables and pass them in.
-##     # This allows for a lot of flexibility.
-##     let aa = initAt(initCritBitTree[string](), initTable[string, Time])
-##     asyncCheck aa.process()
+## # Now we can initialize `at`. We make two tables and pass them in.
+## # This allows for a lot of flexibility.
+## let aa = initAt(initCritBitTree[string](), initTable[string, Time])
+## asyncCheck aa.process()
 ##
-##     # now let's add some data that will be deleted in three seconds
-##     data["foo"] = "bar"
-##     expiry["foo"] = initDuration(seconds=3)
+## # now let's add some data that will be deleted in three seconds
+## data["foo"] = "bar"
+## expiry["foo"] = initDuration(seconds=3)
 ## ```
 ##
 ## If you don't mind using nimble packages, there is a really nice module `btreetables`
 ## in the `fusion` package that can be used.
 ##
 ## ```nim
-##     import times, at, asyncdispatch, fusion/btreetables
-##     let data = newTable[string, string]()  # this is a btree table too but could be a regular one
-##     proc trigger(t: Time, k: string) =
-##         data.del k
-##     let aa = initAt(newTable[Time, string](), newTable[string, Time]())    
-##     asyncCheck expiry.process
-##     data["foo"] = "bar"
-##     aa["foo"] = initDuration(seconds=3)
+## import times, at, asyncdispatch, fusion/btreetables
+## let data = newTable[string, string]()  # this is a btree table too but could be a regular one
+## proc trigger(t: Time, k: string) =
+##     data.del k
+## let aa = initAt(newTable[Time, string](), newTable[string, Time]())    
+## asyncCheck expiry.process
+## data["foo"] = "bar"
+## aa["foo"] = initDuration(seconds=3)
 ## ```
 ##
 ## Sorta tables work great too
@@ -139,7 +139,7 @@
 ## var s = initSortedTable[string, Time]()
 ## var data = newTable[string, string]()
 ## proc trigger(t: Time, k: string) =
-##     data.del k
+## data.del k
 ## let aa = initAt(initSortedTable[Time, string](), initSortedTable[string, Time]())
 ## asyncCheck aa.process
 ## data["foo"] = "bar"
@@ -157,41 +157,41 @@
 ## particularly fast compared to other options out there but it works and does not require any dependencies.
 ##
 ## ```nim
-##     # TODO: add file system database example
+## # TODO: add file system database example
 ## ```
 ##
 ## Most likely, you will prefer to use a tried-and-true key-value store
 ## like LMDB- here wrapped into a table-like interface by LimDB:
 ##
 ## ```nim
-##     import at, os, asyncdispatch, limdb, times, at/timeblobs
+## import at, os, asyncdispatch, limdb, times, at/timeblobs
 ##
-##     # LimDB requires some boilerplate because it only supports strings
-##     iterator keys*(a: limdb.Database): Time =
-##       for k in limdb.keys(a):
-##         yield k.blobToTime
-##     proc del*(a: limdb.Database, t: Time) =
-##       a.del t.timeToBlob
-##     
-##     template `[]`*(a: limdb.Database, t: Time): string =
-##       limdb.`[]`(a, t.timeToBlob)
-##     template `[]`*(a: limdb.Database, s: string): Time =
-##       limdb.`[]`(a, s.blobToTime)
-##     template `[]=`*(a: limdb.Database, t: Time, s: string) =
-##       limdb.`[]=`(a, t.timeToBlob, s)
-##     template `[]=`*(a: limdb.Database, s: string, t: Time) =
-##       limdb.`[]=`(a, s, t.timeToBlob)
-##     
-##     let data = initDatabase(getTempDir() / "limdb", "main")
-##     
-##     proc trigger(t: Time, k: string) =
-##       data.del k
-##     
-##     let aa = initAt(data.initDatabase("at time-to-key"), data.initDatabase("at key-to-time"))
-##     asyncCheck aa.process()
-##     
-##     data["foo"] = "bar"
-##     aa["foo"] = initDuration(seconds=3)
+## # LimDB requires some boilerplate because it only supports strings
+## iterator keys*(a: limdb.Database): Time =
+##   for k in limdb.keys(a):
+##     yield k.blobToTime
+## proc del*(a: limdb.Database, t: Time) =
+##   a.del t.timeToBlob
+## 
+## template `[]`*(a: limdb.Database, t: Time): string =
+##   limdb.`[]`(a, t.timeToBlob)
+## template `[]`*(a: limdb.Database, s: string): Time =
+##   limdb.`[]`(a, s.blobToTime)
+## template `[]=`*(a: limdb.Database, t: Time, s: string) =
+##   limdb.`[]=`(a, t.timeToBlob, s)
+## template `[]=`*(a: limdb.Database, s: string, t: Time) =
+##   limdb.`[]=`(a, s, t.timeToBlob)
+## 
+## let data = initDatabase(getTempDir() / "limdb", "main")
+## 
+## proc trigger(t: Time, k: string) =
+##   data.del k
+## 
+## let aa = initAt(data.initDatabase("at time-to-key"), data.initDatabase("at key-to-time"))
+## asyncCheck aa.process()
+## 
+## data["foo"] = "bar"
+## aa["foo"] = initDuration(seconds=3)
 ## ```
 ##
 ## And this is how this is meant to be used.
