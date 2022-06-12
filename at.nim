@@ -1,33 +1,60 @@
-## ******
-## At
-## ******
+## ****
+## `at`
+## ****
 ##
-## Efficient expiry for any table key pair.
+## A lightweight tool to execute code later
 ##
 ## Why?
 ## ####
 ##
-## It can be quite pleasant to be able to determine
-## that entries in a key-value store will disappear at some time
-## in the future without having to worry about making that happen.
+## While the same thing can be accomplished using the standard library's `asyncdispatch`, at
+## stores the values in a table and only uses one future to go through them.
 ##
-## This is great for keeping all sorts of ephemeral information from
-## cluttering databases, file systems and in-memory locations.
+## This has a lot of advantages:
 ##
-## Features
-## ########
-## 
-## Efficient: Only one reusable future is used for a table of keys
+## :Transparency:
+##     The timers are all neatly accessible in a table 
+##     instead of being hidden in the global dispatcher.
+##     Several `at` instances can be used to group related timers
+##     or timers that do different things.
 ##
-## Flexible: Works with any table-like, in-memory and on-disk
+##     That makes it this much easier to find bugs.
+## :Flexibility:
+##     The timers can be easily modified or removed up until they are triggered.
+##
+##     You can use any table you like as long as it keeps the keys sorted.
+##
+## :Persistence:
+##     Tables don't have to be in-memory. Using a table backed by
+##     persistent storage can preserve triggers across program restarts.
+##     Data is only ever read one-by-one after a trigger, so startup time is
+##     not meaningfully affected.
+##
+## Use cases
+## #########
+##
+## :Expiring Data:
+## A really cool use-case is to remove ephemeral key/value pairs from an (additional) table, especially
+## when persistent storage is used. For example, in a web app, this could be used for things like
+## session key hashes, password reset link hashes, or incomplete form data you don't want to clutter your
+## nice database with but are nice enough to store for your user.
+##
+## :Maintenance tasks:
+## In most apps, maintenance tasks need to be performed- deleting old data, checking for updates,
+## reminding the user to do stuff or simply doing stuff later. Traditionally,
+## at least for web apps, external timers or special daemons are used, but it greatly simplifies both programming
+## and administration to keep everything in-processspecial.
 ##
 ## Limitations
 ## ###########
 ##
-## It's currently limited to tables with strings for keys and values.
-## I know, but I've already went too generic for my use case... will you fix it?
+## The table to look up times `t2k` has to be one that is sorted by the key.
 ##
-## The time table has to be a table that is sorted by the key.
+## This is currently the case for:
+##
+## In-Memory tables: `std/bitcrittree` (requires some boilerplate), `fusion/btreetable` and `pkg/sorta`.
+##
+## Persistent tables: `pkg/limdb` (requires supplied type conversion), `pkg/nimdbx` (untested)
 ##
 ## Usage
 ## #####
@@ -35,70 +62,90 @@
 ## In Memory
 ## ---------
 ##
-## For in-memory usage we will use critbits, because they are in the standard
-## library and are sorted by key. Those don't use the usual table interface, so
-## we need to add some boilerplate to make it behave like a regular table. This
-## isn't necessary for other sorted tables, but those aren't available in the
-## standard libary.
+## It's often good to stick to the standard library as much as possible, however
+## the only key-sorted table in the standard libary is the `CritBitTable`. This
+## has a somewhat different interface to regular tables, so a bit of boilerplate
+## code is needed to convince it to act like one. Also only strings are supported
+## for the keys, so we have to define some converters. This boilerplate can be omitted
+## for other tables.
 ##
 ## ```nim
-##     # wrapper around critbits to give an interface like TableRef[string]
-##     type
-##       Crit = ref CritBitTree[string]
-##     proc initCrit(): Crit =
-##       new(result)
-##     template del(t: Crit, key:string) =
-##       t[].excl key
-##     template `[]`(t: Crit, key:string):string =
-##       t[][key]
-##     template `[]=`(t: Crit, key, value: string) =
-##       t[][key] = value
-##     template contains(t: Crit, key: string):bool =
-##       key in t[]
-##     iterator keys(t: Crit): string =
-##       for key in t[].keys:
-##         yield key 
-##  ```
-## .. note::
-##     A `ref` type should be used for the table because it is
-##     being handled elsewhere in the interface and also from the At.
+## # this stuff is only needed to get critbits in shape to use for storage,
+## # in order to use as few packages as possible
+## import std/times, std/critbits, at, at/timeblobs
 ##
-## Now the expiry can be initialized
-##
-## ```nim
-##
-## # init using the wrapper above
-## let main = initCrit()
+## # a critbittree requires some boilerplate to be accessed like a regular table
+## proc initCritBitTree[string](): CritBitTree[string] =
+##   discard
+## iterator keys*(t: CritBitTree[string]): Time =
+##   for k in critbits.keys(t):
+##     yield k.blobToTime
+## proc del*(tab: var CritBitTree, t: Time) =
+##   tab.excl t.timeToBlob
+## proc del*(t: var CritBitTree, k: string) =
+##   t.excl k
 ## 
-## # start expiring
-## let a = initAt(main, t2k=initCrit(), k2t=initCrit())
-## a.process
-##
+## # and some wrappers to serialize the time to a string 
+## template `[]`*(a: CritBitTree, t: Time): string =
+##   a[t.timeToBlob]
+## template `[]`*(a: CritBitTree, s: string): Time =
+##   a[s].blobToTime
+## template `[]=`*(a: CritBitTree, t: Time, s: string) =
+##   a[t.timeToBlob] = s
+## template `[]=`*(a: CritBitTree, s: string, t: Time) =
+##   a[s] = t.timeToBlob
 ## ```
-## You pass your `main` table that contains your data, and two additional
-## tables: `t2k` to store the expiry times of each key, and `k2t` is there
-## in case you need to look up when a key is set to expire. Responsibility
-## for creating these is given to you because you probably want to control
-## where that data is stored.
 ##
-## That's it with the setup. Now you can expire away.
+## Now that we've got the critbit behaving like a proper table,
+## we can get started.
 ##
 ## ```nim
-## main["foo"] = "bar"
-## a.expire("foo", initDuration(minutes=20))
-## a.expire("bar", dateTime(2030, 12, 31))
-## ```
+## # We store our ephemeral data in a regular table. Note it's a `ref`
+## # otherwise the modifications would be made on a copy.
 ##
-## It also works with other tables. These don't require the coaxing `critbits` do
-## because they implement the more familiar table interface.
+## let data = newTable[string, string]()
+##
+## # Now we add a trigger proc that `at` will call.
+## # It accesses `data` as a global, but it can be placed into
+## # a proc to use a closure instead.
+##
+## proc trigger(a: At, t: Time, k: string) =
+##     data.del k
+##
+## # Now we can initialize `at`. We make two tables and pass them in.
+## # This allows for a lot of flexibility.
+## let expiry = initAt(initCritBitTree[string](), initCritBitTree[string]())
+## expiry.process
+##
+## # now let's add some data that will be deleted in three seconds
+## data["foo"] = "bar"
+## expiry["foo"] = initDuration(seconds=3)
+##
+## If you don't mind using nimble packages, there is a really nice module `btreetables`
+## in the `fusion` package that can be used.
 ##
 ## ```nim
-## import fusion/btreetable
-## let main = initTable[string, string]()
-## let a = initAt(main, t2k=initTable[string, string](), k2t=initTable[string, string]())
-## a.process
-##
+## import times, at, asyncdispatch, fusion/btreetables
+## let data = newTable[string, string]()  # this is a btree table too but could be a regular one
+## proc trigger(a: At, t: Time, k: string) =
+##     data.del k
+## let aa = initAt(newTable[Time, string](), newTable[string, Time]())    
+## asyncCheck expiry.process
+## data["foo"] = "bar"
+## aa["foo"] = initDuration(seconds=3)
 ## ```
+##
+## Sorta tables work great too
+##
+## import times, sorta, at, asyncdispatch, tables
+## var s = initSortedTable[string, Time]()
+## var data = newTable[string, string]()
+## proc trigger(a: At, t: Time, k: string) =
+##     data.del k
+## let aa = initAt(initSortedTable[Time, string](), initSortedTable[string, Time]())
+## asyncCheck aa.process
+## data["foo"] = "bar"
+## aa["foo"] = initDuration(seconds=3)
 ##
 ## On-Disk
 ## -------
