@@ -1,7 +1,7 @@
 
 version       = "0.1.0"
 author        = "Carlo Capocasa"
-description   = "A lightweight tool to execute code later"
+description   = "A powerful, lightweight tool to execute code later"
 license       = "MIT"
 
 task test, "Run tests":
