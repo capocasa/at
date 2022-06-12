@@ -1,5 +1,5 @@
 ## ******
-## Expiry
+## At
 ## ******
 ##
 ## Efficient expiry for any table key pair.
@@ -61,7 +61,7 @@
 ##  ```
 ## .. note::
 ##     A `ref` type should be used for the table because it is
-##     being handled elsewhere in the interface and also from the Expiry.
+##     being handled elsewhere in the interface and also from the At.
 ##
 ## Now the expiry can be initialized
 ##
@@ -71,8 +71,8 @@
 ## let main = initCrit()
 ## 
 ## # start expiring
-## let e = initExpiry(main, t2k=initCrit(), k2t=initCrit())
-## e.process
+## let a = initAt(main, t2k=initCrit(), k2t=initCrit())
+## a.process
 ##
 ## ```
 ## You pass your `main` table that contains your data, and two additional
@@ -85,8 +85,8 @@
 ##
 ## ```nim
 ## main["foo"] = "bar"
-## e.expire("foo", initDuration(minutes=20))
-## e.expire("bar", dateTime(2030, 12, 31))
+## a.expire("foo", initDuration(minutes=20))
+## a.expire("bar", dateTime(2030, 12, 31))
 ## ```
 ##
 ## It also works with other tables. These don't require the coaxing `critbits` do
@@ -95,15 +95,15 @@
 ## ```nim
 ## import fusion/btreetable
 ## let main = initTable[string, string]()
-## let e = initExpiry(main, t2k=initTable[string, string](), k2t=initTable[string, string]())
-## e.process
+## let a = initAt(main, t2k=initTable[string, string](), k2t=initTable[string, string]())
+## a.process
 ##
 ## ```
 ##
 ## On-Disk
 ## -------
 ##
-## Expiry really shines when it comes to expiring values that are persisted to disk-
+## At really shines when it comes to expiring values that are persisted to disk-
 ## a key-value database, as there is no need to load data from disk into memory storage
 ## and keep it in sync. Just give expiry a table-like interface to the database and you're
 ## good to go. As an example, here is your own filesystem-based persistence layer. It's not
@@ -127,97 +127,86 @@
 ##       for key in t[].keys:
 ##         yield key 
 
-import asyncdispatch, asyncfutures, times, expiry/blob
+import asyncdispatch, asyncfutures, times
 
 type
-  Expiry*[T] = ref object  # ref for the async code
-    renew*: Duration
+  At*[TTable] = ref object  # ref for the async code
     trigger*: FutureVar[void]
-    db*: T
-    t2k*: T
-    k2t*: T
+    t2k*: TTable
+    k2t*: TTable
 
-proc next*(e: Expiry): string=
+proc next*(a: At): Time =
   mixin keys
-  for tb in e.t2k.keys:
-    return tb
+  for t in a.t2k.keys:
+    return t
   raise newException(KeyError, "next key in time-to-keys table is empty")
 
-proc expire(e: Expiry, tb: string) =
+proc trigger*[T](a: At, t: Time, key: T) =
+  discard
+
+proc process*(a: At) {.async.} =
+  mixin trigger
   mixin del
-  let key = e.t2k[tb]
-  try:
-    e.db.del(key)
-  except KeyError:
-    discard
-  e.t2k.del(tb)
-  e.k2t.del(key)
-
-proc fromTime*(t: Time): string =
-  mixin timeToBlob
-  t.timeToBlob
-
-proc toTime*(s: string): Time =
-  mixin blobToTime
-  s.blobToTime
-
-proc isEmpty[T](t: T) =
-  mixin next
-  try:
-    discard t.next
-    false
-  except KeyError:
-    true
-
-proc process*(e: Expiry) {.async.} =
-  mixin toTime
   while true:
     let now = getTime()
-    let tb = block:
-      var tb:string
+    let t = block:
+      var t: Time
       while true:
         try:
-          tb = e.next
+          t = a.next
           break
         except KeyError:
-          discard await withTimeout[void](Future[void](e.trigger), e.renew.inMilliseconds.int)
-          e.trigger.clean()
-      tb
-    let t = tb.toTime
+          discard await withTimeout[void](Future[void](a.trigger), initDuration(days=1).inMilliseconds.int)
+          a.trigger.clean()
+      t
     if t <= now:
-      e.expire(tb)
+      let key = a.t2k[t]
+      trigger(a, t, key)
+      a.t2k.del(t)
+      a.k2t.del(key)
     else:
       let d = t - now
-      discard await withTimeout[void](Future[void](e.trigger), d.inMilliseconds.int)
-      e.trigger.clean()
+      discard await withTimeout[void](Future[void](a.trigger), d.inMilliseconds.int)
+      a.trigger.clean()
 
-proc initExpiry*[T](db, t2k, k2t: T): Expiry[T] =
+proc initAt*[TTable](t2k: TTable, k2t: TTable): At[TTable] =
   new(result)
-  result.trigger = newFutureVar[void]("expiry")
-  result.db = db
   result.t2k = t2k
   result.k2t = k2t
-  result.renew = initDuration(seconds=3)
+  result.trigger = newFutureVar[void]("at")
 
-proc expire*(e: Expiry, key: string, t: Time) =
+
+proc `[]=`*[T](a: At, key: T, t: Time) =
   mixin `[]=`
-  mixin fromTime
 
   let retrigger = try:
-    # new next trigger, retrigger
-    e.next.toTime > t
+    a.next > t
   except KeyError:
     # empty, so retrigger
     true
  
-  let tb = t.fromTime
-  e.t2k[tb] = key
-  e.k2t[key] = tb
-    
+  a.t2k[t] = key
+  a.k2t[key] = t
+
   if retrigger:
-    e.trigger.complete()
+    a.trigger.complete()
 
-template expire*(e: Expiry, key: string, d: Duration) =
-  expire(e, key, getTime() + d)
+proc `[]=`*[T](a: At, key: T, d: Duration) =
+  a[key] = getTime() + d
 
+proc del*[T](a: At, key: T) =
+  let t = a.k2t[key]
+  let retrigger = a.next == t
+  del a.t2k[t]
+  del a.k2t[key]
+  if retrigger:
+    a.trigger.complete()
+
+proc del(a: At, t: Time) =
+  let key = a.t2k[t]
+  let retrigger = a.next == t
+  del a.k2t[key]
+  del a.t2k[t]
+  if retrigger:
+    a.trigger.complete()
 
