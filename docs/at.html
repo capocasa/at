@@ -163,12 +163,12 @@ function main() {
 <p>This has a lot of advantages:</p>
 <p>Transparency: The timers are all neatly accessible in a table instead of being hidden in the global dispatcher. Several <tt class="docutils literal"><span class="pre"><span class="Identifier">at</span></span></tt> instances can be used to group related timers or timers that do different things. That makes it this much easier to find bugs.</p>
 <p>Flexibility: The timers can be easily modified or removed up until they are triggered. You can use any table you like as long as it keeps the keys sorted.</p>
-<p>Persistence: Tables don't have to be in-memory. Using a table backed by persistent storage can preserve triggers across program restarts. Data is only ever read one-by-one after a trigger, so startup time is not meaningfully affected.</p>
+<p>Persistence: Tables don't have to be in-memory. Using a table backed by persistent storage can preserve triggers across program restarts. Data is only ever read one-by-one after a trigger, so startup time is not meaningfully affected. And since the data is used directly off disk, you don't need to worry about whether the in-memory triggers are actually in sync with the on-disk triggers because the disk data is used directly. If you use a memory-mapped persistent table, this doesn't affect performance at all.</p>
 
 <h1><a class="toc-backref" id="use-cases" href="#use-cases">Use cases</a></h1><p><em>Expiring Data</em></p>
 <p>A really cool use-case is to remove ephemeral key/value pairs from an (additional) table, especially when persistent storage is used. For example, in a web app, this could be used for things like session key hashes, password reset link hashes, or incomplete form data you don't want to clutter your nice database with but are nice enough to store for your user.</p>
 <p><em>Maintenance tasks</em></p>
-<p>In most apps, maintenance tasks need to be performed- deleting old data, checking for updates, reminding the user to do stuff or simply doing stuff later. Traditionally, at least for web apps, external timers or special daemons are used, but it greatly simplifies both programming and administration to keep everything in-processspecial.</p>
+<p>In most apps, maintenance tasks need to be performed- deleting old data, checking for updates, reminding the user to do stuff or simply doing stuff later. Traditionally, at least for web apps, external timers or special daemons are used, but it greatly simplifies both programming and administration to keep everything in-process.</p>
 
 <h1><a class="toc-backref" id="features" href="#features">Features</a></h1><ul class="simple"><li>Simple-yet-effective implementation designed for tens of thousands of planned triggers using only one future.</li>
 <li>BYOT- bring your own table, you have full control over the table or table-like object used to store trigger information so you have full control data is stored. It's also fairly easy to write your own table interface, see the filesystem-storage example.</li>
@@ -361,7 +361,7 @@ This is a trigger that does nothing. This needs to be implemented by you- copy t
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2022-06-12 22:48:57 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2022-06-13 08:00:59 UTC</small>
       </div>
     </div>
   </div>

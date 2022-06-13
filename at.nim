@@ -24,7 +24,10 @@
 ## Persistence: Tables don't have to be in-memory. Using a table backed by
 ## persistent storage can preserve triggers across program restarts.
 ## Data is only ever read one-by-one after a trigger, so startup time is
-## not meaningfully affected.
+## not meaningfully affected. And since the data is used directly off disk, you don't
+## need to worry about whether the in-memory triggers are actually in sync with the
+## on-disk triggers because the disk data is used directly. If you use a memory-mapped persistent
+## table, this doesn't affect performance at all.
 ##
 ## Use cases
 ## #########
@@ -41,7 +44,7 @@
 ## In most apps, maintenance tasks need to be performed- deleting old data, checking for updates,
 ## reminding the user to do stuff or simply doing stuff later. Traditionally,
 ## at least for web apps, external timers or special daemons are used, but it greatly simplifies both programming
-## and administration to keep everything in-processspecial.
+## and administration to keep everything in-process.
 ##
 ## Features
 ## ########
