@@ -7,7 +7,7 @@
 ## Why?
 ## ####
 ##
-## While the same thing can be accomplished using the standard library's `asyncdispatch`, at
+## While the same thing can be accomplished using the standard library's `asyncdispatch`, `at`
 ## stores the values in a table and only uses one future to go through them.
 ##
 ## This has a lot of advantages:
@@ -81,10 +81,9 @@
 ## for other tables.
 ##
 ## ```nim
-## # a critbittree requires some boilerplate to be accessed like a regular table
 ## import std/asyncdispatch, std/os, std/times, std/tables, std/critbits, at, at/timeblobs
 ## 
-## # a critbittree requires some boilerplate to be used as a [time: string] table 
+## # a critbittree requires some boilerplate to be used like a regular table, of type [Time, string]
 ## proc initCritBitTree[T](): CritBitTree[T] =
 ##   discard
 ## iterator keys*(t: CritBitTree[string]): Time =
@@ -119,7 +118,7 @@
 ##
 ## # now let's add some data that will be deleted in three seconds
 ## data["foo"] = "bar"
-## expiry["foo"] = initDuration(seconds=3)
+## aa["foo"] = initDuration(seconds=3)
 ## ```
 ##
 ## If you don't mind using nimble packages, there is a really nice module `btreetables`
@@ -131,13 +130,14 @@
 ## proc trigger(t: Time, k: string) =
 ##     data.del k
 ## let aa = initAt(newTable[Time, string](), newTable[string, Time]())    
-## asyncCheck expiry.process
+## asyncCheck aa.process
 ## data["foo"] = "bar"
 ## aa["foo"] = initDuration(seconds=3)
 ## ```
 ##
-## Sorta tables work great too
+## `sorta` tables from nimble work great too
 ##
+## ```nim
 ## import times, sorta, at, asyncdispatch, tables
 ## var s = initSortedTable[string, Time]()
 ## var data = newTable[string, string]()
@@ -147,15 +147,16 @@
 ## asyncCheck aa.process
 ## data["foo"] = "bar"
 ## aa["foo"] = initDuration(seconds=3)
+## ```
 ##
 ## On-Disk
 ## -------
 ##
-## Now for the main event- At really shines when it comes to expiring values that are persisted to disk-
+## Now for the main event- `at` really shines when it comes to expiring values that are persisted to disk-
 ## a key-value database, as there is no need to load the time information from disk into memory storage
 ## and keep it in sync- everything stays on disk until there is a trigger.
 ##
-## Just give expiry a table-like interface to the database and you're
+## Just give `at` a table-like interface to the database and you're
 ## good to go. As an example, you could create your own filesystem-based persistence layer. That's not
 ## particularly fast compared to other options out there but it works and does not require any dependencies.
 ##
@@ -197,7 +198,7 @@
 ## aa["foo"] = initDuration(seconds=3)
 ## ```
 ##
-## And this is how this is meant to be used.
+## And this is how `at`is meant to be used.
 ##
 ##
 
