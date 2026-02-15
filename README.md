@@ -68,3 +68,22 @@ Usage
     aa["foo"] = initDuration(seconds=3)
 
 [Full Documentation](https://capocasa.github.io/at/at.html)
+
+Threaded version
+----------------
+
+There is also `att`, a thread-based equivalent. If you don't use async in your application,
+or if you prefer the simplicity of threads, `att` gives you the exact same functionality
+without pulling in `asyncdispatch`.
+
+    import times, at/t, fusion/btreetables
+    let data = newTable[string, string]()
+    proc trigger(t: Time, k: string) =
+        data.del k
+    var aa = initAtt(newTable[Time, string](), newTable[string, Time]())
+    aa.process()
+    data["foo"] = "bar"
+    aa["foo"] = initDuration(seconds=3)
+    # when done: aa.stop()
+
+[Full Documentation](https://capocasa.github.io/at/t.html)

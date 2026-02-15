@@ -1,21 +1,22 @@
-## **
-## at
-## **
+## ****
+## at/t
+## ****
 ##
-## A powerful, lightweight tool to execute code later
+## A powerful, lightweight tool to execute code later, using threads
 ##
 ## Why?
 ## ####
 ##
-## While the same thing can be accomplished using the standard library's `asyncdispatch`, `at`
-## stores the values in a table and only uses one future to go through them.
+## `att` is the thread-based equivalent of `at`. If you don't use async in your application,
+## or if you prefer the simplicity of threads, `att` gives you the exact same functionality
+## without pulling in `asyncdispatch`.
 ##
-## This has a lot of advantages:
+## It has all the same advantages as `at`:
 ##
 ## Transparency:
-## The timers are all neatly accessible in a table 
-## instead of being hidden in the global dispatcher.
-## Several `at` instances can be used to group related timers
+## The timers are all neatly accessible in a table
+## instead of being hidden in a thread somewhere.
+## Several `att` instances can be used to group related timers
 ## or timers that do different things. That makes it this much easier to find bugs.
 ##
 ## Flexibility: The timers can be easily modified or removed up until they are triggered.
@@ -28,6 +29,9 @@
 ## need to worry about whether the in-memory triggers are actually in sync with the
 ## on-disk triggers because the disk data is used directly. If you use a memory-mapped persistent
 ## table, this doesn't affect performance at all.
+##
+## Thread safety: All table operations are protected by a lock, so you can safely
+## add and remove triggers from any thread.
 ##
 ## Use cases
 ## #########
@@ -49,10 +53,21 @@
 ## Features
 ## ########
 ##
-## - Simple-yet-effective implementation designed for tens of thousands of planned triggers using only one future.
+## - Simple-yet-effective implementation designed for tens of thousands of planned triggers using only one thread.
 ## - BYOT- bring your own table, you have full control over the table or table-like object used to store trigger
-##   information so you have full control data is stored. It's also fairly easy to write your own table interface,
-##   see the filesystem-storage example.
+##   information so you have full control over how data is stored. It's also fairly easy to write your own table interface,
+##   see the filesystem-storage example in `at`.
+## - No dependency on `asyncdispatch`. If you're not using async, you don't have to start.
+##
+## Differences from `at`
+## #####################
+##
+## The API is intentionally almost identical. Here's what's different:
+##
+## - `initAtt` instead of `initAt`
+## - `a.process()` instead of `asyncCheck a.process()`
+## - `a.stop()` to cleanly shut down the processing thread when you're done
+## - No need for `asyncdispatch`, `waitFor` or `sleepAsync`
 ##
 ## Limitations
 ## ###########
@@ -81,8 +96,8 @@
 ## for other tables.
 ##
 ## ```nim
-## import std/asyncdispatch, std/os, std/times, std/tables, std/critbits, at, at/timeblobs
-## 
+## import std/[os, times, tables, critbits], at/t, at/timeblobs
+##
 ## # a critbittree requires some boilerplate to be used like a regular table, of type [Time, string]
 ## proc initCritBitTree[T](): CritBitTree[T] =
 ##   discard
@@ -92,7 +107,7 @@
 ## proc del*(tab: var CritBitTree, t: Time) =
 ##   tab.excl t.timeToBlob
 ## template `[]`*(a: CritBitTree, t: Time): string =
-##   a[t.timeToBlob]                                                 
+##   a[t.timeToBlob]
 ## template `[]=`*(a: CritBitTree, t: Time, s: string) =
 ##   a[t.timeToBlob] = s
 ##
@@ -104,33 +119,36 @@
 ##
 ## let data = newTable[string, string]()
 ##
-## # Now we add a trigger proc that `at` will call.
+## # Now we add a trigger proc that `att` will call.
 ## # It accesses `data` as a global, but it can be placed into
 ## # a proc to use a closure instead.
 ##
 ## proc trigger(t: Time, k: string) =
 ##     data.del k
 ##
-## # Now we can initialize `at`. We make two tables and pass them in.
+## # Now we can initialize `att`. We make two tables and pass them in.
 ## # This allows for a lot of flexibility.
-## let aa = initAt(initCritBitTree[string](), initTable[string, Time])
-## asyncCheck aa.process()
+## let aa = initAtt(initCritBitTree[string](), initTable[string, Time])
+## aa.process()
 ##
 ## # now let's add some data that will be deleted in three seconds
 ## data["foo"] = "bar"
 ## aa["foo"] = initDuration(seconds=3)
+##
+## # when you're done, stop the processing thread
+## # aa.stop()
 ## ```
 ##
 ## If you don't mind using nimble packages, there is a really nice module `btreetables`
 ## in the `fusion` package that can be used.
 ##
 ## ```nim
-## import times, at, asyncdispatch, fusion/btreetables
+## import times, at/t, fusion/btreetables
 ## let data = newTable[string, string]()  # this is a btree table too but could be a regular one
 ## proc trigger(t: Time, k: string) =
 ##     data.del k
-## let aa = initAt(newTable[Time, string](), newTable[string, Time]())    
-## asyncCheck aa.process
+## let aa = initAtt(newTable[Time, string](), newTable[string, Time]())
+## aa.process()
 ## data["foo"] = "bar"
 ## aa["foo"] = initDuration(seconds=3)
 ## ```
@@ -138,13 +156,13 @@
 ## `sorta` tables from nimble work great too
 ##
 ## ```nim
-## import times, sorta, at, asyncdispatch, tables
+## import times, sorta, at/t, tables
 ## var s = initSortedTable[string, Time]()
 ## var data = newTable[string, string]()
 ## proc trigger(t: Time, k: string) =
 ## data.del k
-## let aa = initAt(initSortedTable[Time, string](), initSortedTable[string, Time]())
-## asyncCheck aa.process
+## let aa = initAtt(initSortedTable[Time, string](), initSortedTable[string, Time]())
+## aa.process()
 ## data["foo"] = "bar"
 ## aa["foo"] = initDuration(seconds=3)
 ## ```
@@ -152,11 +170,11 @@
 ## On-Disk
 ## -------
 ##
-## Now for the main event- `at` really shines when it comes to expiring values that are persisted to disk-
+## Now for the main event- `att` really shines when it comes to expiring values that are persisted to disk-
 ## a key-value database, as there is no need to load the time information from disk into memory storage
 ## and keep it in sync- everything stays on disk until there is a trigger.
 ##
-## Just give `at` a table-like interface to the database and you're
+## Just give `att` a table-like interface to the database and you're
 ## good to go. As an example, you could create your own filesystem-based persistence layer. That's not
 ## particularly fast compared to other options out there but it works and does not require any dependencies.
 ##
@@ -168,7 +186,7 @@
 ## like LMDB- here wrapped into a table-like interface by LimDB:
 ##
 ## ```nim
-## import at, os, asyncdispatch, limdb, times, at/timeblobs
+## import at/t, os, limdb, times, at/timeblobs
 ##
 ## # LimDB requires some boilerplate because it only supports strings
 ## iterator keys*(a: limdb.Database): Time =
@@ -176,7 +194,7 @@
 ##     yield k.blobToTime
 ## proc del*(a: limdb.Database, t: Time) =
 ##   a.del t.timeToBlob
-## 
+##
 ## template `[]`*(a: limdb.Database, t: Time): string =
 ##   limdb.`[]`(a, t.timeToBlob)
 ## template `[]`*(a: limdb.Database, s: string): Time =
@@ -185,34 +203,44 @@
 ##   limdb.`[]=`(a, t.timeToBlob, s)
 ## template `[]=`*(a: limdb.Database, s: string, t: Time) =
 ##   limdb.`[]=`(a, s, t.timeToBlob)
-## 
+##
 ## let data = initDatabase(getTempDir() / "limdb", "main")
-## 
+##
 ## proc trigger(t: Time, k: string) =
 ##   data.del k
-## 
-## let aa = initAt(data.initDatabase("at time-to-key"), data.initDatabase("at key-to-time"))
-## asyncCheck aa.process()
-## 
+##
+## let aa = initAtt(data.initDatabase("att time-to-key"), data.initDatabase("att key-to-time"))
+## aa.process()
+##
 ## data["foo"] = "bar"
 ## aa["foo"] = initDuration(seconds=3)
 ## ```
 ##
-## And this is how `at`is meant to be used.
-##
+## And this is how `att` is meant to be used.
 ##
 
+import std/[times, locks, os]
 
-import asyncdispatch, asyncfutures, times
+when defined(posix):
+  type
+    CTimespec {.importc: "struct timespec", header: "<time.h>", bycopy.} = object
+      tv_sec {.importc.}: clong
+      tv_nsec {.importc.}: clong
+
+  proc c_pthread_cond_timedwait(cond: pointer, lock: pointer, abstime: ptr CTimespec): cint
+    {.importc: "pthread_cond_timedwait", header: "<pthread.h>".}
 
 type
-  At*[TTimeToKey, TTable2] = ref object  # ref for the async code
-    ## A powerful, lightweight tool to execute code later
-    trigger*: FutureVar[void]
+  Att*[TTimeToKey, TTable2] = object
+    ## A powerful, lightweight tool to execute code later, using threads.
     t2k*: TTimeToKey
     k2t*: TTable2
+    lock*: Lock
+    cond*: Cond
+    thread*: Thread[pointer]
+    running*: bool
 
-proc next*(a: At): Time =
+proc next*(a: Att): Time =
   ## Internal use, uses the `keys` iterator to get the first time of the
   ## times-to-keys table to start waiting.
   mixin keys
@@ -222,105 +250,123 @@ proc next*(a: At): Time =
 
 proc trigger*[T](t: Time, key: T) =
   ## This is a trigger that does nothing. This needs to be implemented by you-
-  ## copy the definition and place it in the same file you instantiate `at` in.
+  ## copy the definition and place it in the same file you instantiate `tat` in.
   discard
 
-proc trigger*[T](a: At, t: Time, key: T) =
-  ## This is a trigger that allows access to the `at` object. Use with caution.
+proc trigger*[T](a: Att, t: Time, key: T) =
+  ## This is a trigger that allows access to the `att` object. Use with caution.
   ## Don't implement both if you don't want both to run.
   discard
 
-proc process*(a: At) {.async.} =
-  ## Call after initializing to start processing. This sets up the future and waits.
-  mixin trigger
-  mixin del
-  while true:
-    let now = getTime()
-    let t = block:
-      var t: Time
-      while true:
-        try:
-          t = a.next
-          break
-        except KeyError:
-          discard await withTimeout[void](Future[void](a.trigger), initDuration(days=1).inMilliseconds.int)
-          a.trigger.clean()
-      t
-    #[
-    stdout.write "T2K: "
-    for k, v in a.t2k:
-      stdout.write $k.blobToTime, " ", v, ", "
-    echo ""
-    stdout.write "K2T: "
-    for k, v in a.k2t:
-      stdout.write k, " ", $v.blobToTime, ", "
-    echo ""
-    ]#
-    if t <= now:
-      let key = a.t2k[t]
-      #echo "DEL ", key
-      trigger(t, key)
-      trigger(a, t, key)
-      a.t2k.del(t)
-      a.k2t.del(key)
-    else:
-      let d = t - now
-      #echo "WAIT ", d.inSeconds, " seconds"
-      discard await withTimeout[void](Future[void](a.trigger), d.inMilliseconds.int)
-      a.trigger.clean()
+proc waitCondUntil*(cond: var Cond, lock: var Lock, deadline: Time) =
+  ## Wait on a condition variable until an absolute deadline.
+  when defined(posix):
+    var ts: CTimespec
+    ts.tv_sec = deadline.toUnix.clong
+    ts.tv_nsec = deadline.nanosecond.clong
+    discard c_pthread_cond_timedwait(addr cond, addr lock, addr ts)
+  else:
+    # Fallback for non-POSIX: release lock, sleep, re-acquire.
+    let d = deadline - getTime()
+    let ms = d.inMilliseconds
+    if ms <= 0: return
+    release(lock)
+    sleep(ms.int)
+    acquire(lock)
 
-proc initAt*[TTimeToKey, TTable2](t2k: TTimeToKey, k2t: TTable2): At[TTimeToKey, TTable2] =
-  ## Initialize an `at` tool to execute code later.
+proc initAtt*[TTimeToKey, TTable2](t2k: TTimeToKey, k2t: TTable2): Att[TTimeToKey, TTable2] =
+  ## Initialize an `att` tool to execute code later using threads.
   ##
   ## You give it two tables or table-like objects, one to store times and associated keys,
   ## in the others the keys are mapped to the times in case they need to be looked up.
   ##
-  ## The time-to-key table needs to be of the kind that sorts by its keys. critbits works in
-  ## the standard library, and so does btreetable in fusion.
-  ##
-  ## Persistent table-like objects are often preferred.
-  ##
-  new(result)
+  ## The time-to-key table needs to be of the kind that sorts by its keys.
   result.t2k = t2k
   result.k2t = k2t
-  result.trigger = newFutureVar[void]("at")
+  initLock(result.lock)
+  initCond(result.cond)
+  result.running = false
 
+template process*(a: var Att) =
+  ## Call after initializing to start processing in a background thread.
+  mixin trigger
+  mixin del
+  a.running = true
 
-proc `[]=`*[T](a: At, key: T, t: Time) =
+  proc attProcessThread(arg: pointer) {.thread.} =
+    {.cast(gcsafe).}:
+      let aa = cast[ptr type(a)](arg)
+      while aa[].running:
+        acquire(aa[].lock)
+        let t = block:
+          var t: Time
+          while true:
+            try:
+              t = aa[].next
+              break
+            except KeyError:
+              waitCondUntil(aa[].cond, aa[].lock, getTime() + initDuration(days=1))
+              if not aa[].running:
+                release(aa[].lock)
+                return
+          t
+        let now = getTime()
+        if t <= now:
+          let key = aa[].t2k[t]
+          aa[].t2k.del(t)
+          aa[].k2t.del(key)
+          release(aa[].lock)
+          trigger(t, key)
+          trigger(aa[], t, key)
+        else:
+          waitCondUntil(aa[].cond, aa[].lock, t)
+          release(aa[].lock)
+
+  createThread(a.thread, attProcessThread, cast[pointer](addr a))
+
+proc stop*(a: var Att) =
+  ## Stop the processing thread and wait for it to finish.
+  a.running = false
+  signal(a.cond)
+  joinThread(a.thread)
+
+proc `[]=`*[T](a: var Att, key: T, t: Time) =
   ## Set a trigger as an absolute time.
   mixin `[]=`
-
+  acquire(a.lock)
   let retrigger = try:
     a.next > t
   except KeyError:
     # empty, so retrigger
     true
- 
   a.t2k[t] = key
   a.k2t[key] = t
-
+  release(a.lock)
   if retrigger:
-    a.trigger.complete()
+    signal(a.cond)
 
-proc `[]=`*[T](a: At, key: T, d: Duration) =
+proc `[]=`*[T](a: var Att, key: T, d: Duration) =
   ## Set a trigger relative to now.
   a[key] = getTime() + d
 
-proc del*[T](a: At, key: T) =
+proc del*[T](a: var Att, key: T) =
   ## Manually remove a trigger by its key
+  acquire(a.lock)
   let t = a.k2t[key]
   let retrigger = a.next == t
-  del a.t2k[t]
-  del a.k2t[key]
+  a.t2k.del(t)
+  a.k2t.del(key)
+  release(a.lock)
   if retrigger:
-    a.trigger.complete()
+    signal(a.cond)
 
-proc del(a: At, t: Time) =
+proc del(a: var Att, t: Time) =
   ## Manually remove a trigger by its time (need be exact to the nanosecond)
+  acquire(a.lock)
   let key = a.t2k[t]
   let retrigger = a.next == t
-  del a.k2t[key]
-  del a.t2k[t]
+  a.k2t.del(key)
+  a.t2k.del(t)
+  release(a.lock)
   if retrigger:
-    a.trigger.complete()
-
+    signal(a.cond)
